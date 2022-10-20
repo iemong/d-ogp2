@@ -1,3 +1,4 @@
 name = "d-ogp2"
-main = "src/index.ts"
+main = "src/index.tsx"
 compatibility_date = "2022-10-11"
+compatibility_flags = ["streams_enable_constructors"]
