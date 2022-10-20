@@ -35,42 +35,53 @@ const genModuleInit = () => {
 
 const initModule = genModuleInit();
 
-async function handleRequest(request: Request) {
-  await initModule();
-  const { searchParams } = new URL(request.url);
-  const textParam = searchParams.get("text");
-  const notoSans = await loadGoogleFont({
-    family: "Noto Sans JP",
-    weight: 100,
-  });
+async function handleRequest(event: FetchEvent) {
+  const cacheUrl = new URL(event.request.url);
+  const cacheKey = new Request(cacheUrl.toString(), event.request);
+  const cache = caches.default;
+  let response = await cache.match(cacheKey);
 
-  const svg = await satori(<Image text={textParam || ""} />, {
-    width: 1200,
-    height: 630,
-    fonts: [
-      {
-        name: "NotoSansJP",
-        data: notoSans,
-        weight: 100,
-        style: "thin",
+  if (!response) {
+    await initModule();
+    const { searchParams } = new URL(event.request.url);
+    const textParam = searchParams.get("text");
+    const notoSans = await loadGoogleFont({
+      family: "Noto Sans JP",
+      weight: 100,
+    });
+
+    const svg = await satori(<Image text={textParam || "Hello, world!"} />, {
+      width: 1200,
+      height: 630,
+      fonts: [
+        {
+          name: "NotoSansJP",
+          data: notoSans,
+          weight: 100,
+          style: "thin",
+        },
+      ],
+    });
+
+    const resvg = new Resvg(svg);
+    const pngData = resvg.render();
+    const pngBuffer = pngData.asPng();
+
+    response = new Response(pngBuffer, {
+      headers: {
+        "content-type": "image/png",
+        "Cache-Control": "86400",
       },
-    ],
-  });
+    });
+    event.waitUntil(cache.put(cacheKey, response.clone()));
+  }
 
-  const resvg = new Resvg(svg);
-  const pngData = resvg.render();
-  const pngBuffer = pngData.asPng();
-
-  return new Response(pngBuffer, {
-    headers: {
-      "content-type": "image/png",
-    },
-  });
+  return response;
 }
 
 addEventListener("fetch", (event) => {
   if (event.request.method === "GET") {
-    return event.respondWith(handleRequest(event.request));
+    return event.respondWith(handleRequest(event));
   }
-  return event.respondWith(new Response(`The request wasn't a GET`));
+  return event.respondWith(new Response(`The request wasn't a GET`, { status: 405}));
 });
